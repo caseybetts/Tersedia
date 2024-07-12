@@ -4,66 +4,73 @@
 import arcpy
 
 # Find applicable spacecraft
-def applicable_spacecraft(onv):
-    """ Returns a list of applicable spacecraft from the given onv file """
+def onv_dict(all_onvs):
+    """ Returns a dictionary with spacecraft as keys and onv files as values """
 
-    with arcpy.da.SearchCursor(onv, "sensor") as cursor:
-        
-        for row in cursor:
-            if len(row) != 1:
-                arcpy.AddMessage("The onv file does not contain exactly one spacecraft")
-            else:
-                return row[0]    
+    onv_dict = dict()
+
+    for onv in all_onvs:
+
+        try:
+
+            with arcpy.da.SearchCursor(onv, "sensor") as cursor:
+                
+                for row in cursor:
+                    if len(row) != 1:
+                        arcpy.AddMessage("The onv file does not contain exactly one spacecraft")
+                    else:
+                        onv_dict[str(row[0]).lower()] = onv 
+        except:
             
+            pass
 
+    return onv_dict
+            
 # Create feature class of available orders
-def available_orders(prod, onv, rev, respect_ona = True):
+def available_orders(prod, all_onvs):
     """ Select orders accessable on a given rev based on the order's max ONA vlaue """
 
     arcpy.AddMessage("Running available_orders.....")
 
     # Definition query values
-    onv_values = [35, 30, 25, 20, 15]
-    spacecraft = applicable_spacecraft(onv).lower()
+    ona_values = [35, 30, 25, 20, 15]
+    order_file_names = []
 
-    # File names
-    # onv_rev = "onv_" + spacecraft + "rev_" + rev
-    prod_layer = "Available_orders_on_rev_" + rev
+    for spacecraft in all_onvs:
 
-    # Select and export the given rev
-    # selection = f"\"rev_num\" = {rev}"
-    arcpy.conversion.ExportFeatures(onv, "Tersedia_ONV")
+        # Export the onv as a new feature class
+        # arcpy.conversion.ExportFeatures(all_onvs[spacecraft], "Tersedia_" + spacecraft + "_ONV")
 
-    # Select orders intersecting the 45deg segments of the rev (max selection)
-    arcpy.management.SelectLayerByLocation(prod, "INTERSECT", onv, None, "NEW_SELECTION")
+        # Select orders intersecting the 45deg segments of the rev (max selection)
+        arcpy.management.SelectLayerByLocation(prod, "INTERSECT", all_onvs[spacecraft], None, "NEW_SELECTION")
 
-    # Only include orders that are avaialble based on their max ONA value
-    if respect_ona:
-
-        for ona in onv_values:
+        # Select only the orders that are avaialble based on their max ONA value    
+        for ona in ona_values:
 
             # Deselect orders with ONA under current value
             arcpy.management.SelectLayerByAttribute(prod, "REMOVE_FROM_SELECTION", "max_ona < " + str(ona + 1), None)
 
             # Create an onv feature
-            feature_layer = arcpy.management.MakeFeatureLayer("Tersedia_ONV", "FeatureLayer", f"ona = {ona}")
+            feature_layer = arcpy.management.MakeFeatureLayer(all_onvs[spacecraft], "FeatureLayer", f"ona = {ona}")
 
             # Select orders intersecting the current onv feature layer
             arcpy.management.SelectLayerByLocation(prod, "INTERSECT", feature_layer, None, "ADD_TO_SELECTION")
 
-    # Deselect orders that do not use the spacecraft consitant with the onv
-    arcpy.management.SelectLayerByAttribute(prod, "REMOVE_FROM_SELECTION", spacecraft + " = 0", None)
+        # Deselect orders that do not use the spacecraft consitant with the onv
+        arcpy.management.SelectLayerByAttribute(prod, "REMOVE_FROM_SELECTION", spacecraft + " = 0", None)
 
-    # Export the order layer
-    arcpy.management.MultipartToSinglepart(prod, prod_layer)
+        # File name
+        order_file_names.append( "Available_orders_on_" + spacecraft )
 
-    arcpy.AddMessage("\b Done")
+        # Export the order layer
+        arcpy.management.MultipartToSinglepart(prod, "Available_orders_on_" + spacecraft)
 
-    return prod_layer
+        arcpy.AddMessage("Done Creating Order File")
 
+    return order_file_names
 
 # Add given feature class to the map
-def add_layers_to_map(layer1):
+def add_layer_to_map(source_layer_name, layer1):
     """ Will add the desired layers to the map and symbolize them """
 
     arcpy.AddMessage("Running add_layers_to_map.....")
@@ -75,10 +82,10 @@ def add_layers_to_map(layer1):
     # Add the feature layer to the map
     map.addDataFromPath(layer1)
 
-    # Get the symbology from the symbology template layer
+    # Save the layer just added to the map in a variable
     orders = map.listLayers()[0]
-    source_layer_name = r"Tersedia Symbology Template"
 
+    # Find the source layer by name in the list of layers (or raise and error if not found)
     for layer in map.listLayers():
         if layer.name == source_layer_name:
             source_layer = layer
@@ -89,20 +96,38 @@ def add_layers_to_map(layer1):
     # Apply the symbology to the target layer
     orders.symbology = source_layer.symbology
 
-    arcpy.AddMessage("\b Done")
+    arcpy.AddMessage("Done")
+
+def clean_layer_name(layer):
+    """ Returns the name of the given layer file with the preceding group path removed """
+
+    name = ""
+
+    for i in range(1,len(layer)):
+
+        # Grab each character until a '\' is found
+        if layer[-i] != '\\':
+            name = layer[-i] + name
+        else:
+            return name
 
 
 # Function to be called by the Clear Order Value tool
-def run(prod, onv, rev):
+def run(prod, prod_name, all_onvs):
     """ This function controls what is run by the tool """
-
+    
     # Get current workspace
     current_Workspace = arcpy.env.workspace
-    
-    # Create all the layers and add to the geodatabase
-    orders = available_orders(prod, onv, rev)
 
-    add_layers_to_map(current_Workspace + "\\" + orders)
+    # Create dictionary of {spacecraft: onv_file,...}
+    spacecraft_dict = onv_dict(all_onvs)
+
+    # Create all the layers and add to the geodatabase
+    order_files = available_orders(prod, spacecraft_dict)
+
+    # Add each file to the map and symbolize it
+    for file_name in order_files:
+        add_layer_to_map(clean_layer_name(prod_name), current_Workspace + "\\" + file_name)
 
 
 
