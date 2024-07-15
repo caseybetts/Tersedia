@@ -150,7 +150,7 @@ def run(prod, prod_name, all_onvs, local, sharepoint):
     
     # Define output location
     if sharepoint:
-        sharepoint_location = r"C:\Users\ca003927\Maxar Technologies Holdings Inc\BR-Collection Planning - ArcGIS Pro\Planning Tools\Homegrown Tools\Tersedia - Available Orders\Shapefile_Output"
+        sharepoint_location = r"C:\Users\ca003927\OneDrive - Maxar Technologies Holdings Inc\Private Drop\Git\Tersedia\Shapefile_Output"
     else:
         sharepoint_location = None
         current_workspace = arcpy.env.workspace
