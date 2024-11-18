@@ -1,5 +1,5 @@
 # Author: Casey Betts, 2024
-# This file contains the function for isolating the available orders on a given rev
+# This file contains the functions for identifying and outputting the available orders on a given rev
 
 import arcpy
 
@@ -142,20 +142,20 @@ def clean_layer_name(layer):
 def run(prod, prod_name, all_onvs, local, sharepoint):
     """ This function controls what is run by the tool """
 
-    # Get current workspace
-    if local:
-        current_workspace = arcpy.env.workspace
-    else:
-        current_workspace = None
-    
-    # Define output location
+    # Define output locations
     if sharepoint:
         sharepoint_location = r"C:\Users\ca003927\OneDrive - Maxar Technologies Holdings Inc\Private Drop\Git\Tersedia\Shapefile_Output"
+
+        if local:
+            current_workspace = arcpy.env.workspace
+        else:
+            current_workspace = None
+
     else:
         sharepoint_location = None
         current_workspace = arcpy.env.workspace
 
-    # Create dictionary of {spacecraft: onv_file,...}
+    # Create dictionary of {spacecraft_day: onv_file,...}
     spacecraft_dict = onv_dict(all_onvs)
 
     # Create all the layers and add to the geodatabase
